@@ -50,6 +50,7 @@ PHP_FUNCTION(meminfo_dump)
     php_stream *stream;
     HashTable *visited_items;
 
+    /*这个是打开的文件资源类型的*/
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &zval_stream) == FAILURE) {
         return;
     }
@@ -58,6 +59,7 @@ PHP_FUNCTION(meminfo_dump)
     zend_hash_init(visited_items, 1000, NULL, NULL, 0);
 
     php_stream_from_zval(stream, zval_stream);
+
     php_stream_printf(stream TSRMLS_CC, "{\n");
 
     php_stream_printf(stream TSRMLS_CC, "  \"header\" : {\n");
@@ -67,13 +69,19 @@ PHP_FUNCTION(meminfo_dump)
     php_stream_printf(stream TSRMLS_CC, "    \"peak_memory_usage_real\" : %d\n", zend_memory_peak_usage(1));
     php_stream_printf(stream TSRMLS_CC, "  },\n");
 
+    //开始查询全部的内存数据的
     php_stream_printf(stream TSRMLS_CC, "  \"items\": {\n");
+
+    //运行栈的数据
     meminfo_browse_exec_frames(stream,  visited_items, &first_element);
+
+    //全局的数据的
     meminfo_browse_class_static_members(stream,  visited_items, &first_element);
 
     php_stream_printf(stream TSRMLS_CC, "\n    }\n");
     php_stream_printf(stream TSRMLS_CC, "}\n}\n");
 
+    //释放内存的
     zend_hash_destroy(visited_items);
     FREE_HASHTABLE(visited_items);
 }
@@ -85,11 +93,12 @@ void meminfo_browse_exec_frames(php_stream *stream,  HashTable *visited_items, i
 {
     zend_execute_data *exec_frame, *prev_frame;
     zend_execute_data *init_exec_frame;
+
     HashTable *global_symbol_table;
     HashTable *symbol_table;
     zend_array *p_symbol_table;
 
-    exec_frame = EG(current_execute_data);
+    exec_frame = EG(current_execute_data);//获取当前的data
     init_exec_frame = exec_frame;
 
     char frame_label[500];
@@ -105,14 +114,17 @@ void meminfo_browse_exec_frames(php_stream *stream,  HashTable *visited_items, i
         // Once we have the symbol table, switch to the prev frame to get the right frame name
         prev_frame = exec_frame->prev_execute_data;
 
+        //获取到的是变量的范围是那个的
         if (prev_frame) {
             if (prev_frame->prev_execute_data) {
+                //这是执行栈的数据的
                 meminfo_build_frame_label(frame_label, sizeof(frame_label), prev_frame);
             } else {
                 snprintf(frame_label, sizeof(frame_label), "<GLOBAL>");
             }
         }
 
+        //当前栈的内存数据
         meminfo_browse_zvals_from_symbol_table(stream, frame_label, p_symbol_table, visited_items, first_element);
 
         exec_frame = exec_frame->prev_execute_data;
@@ -140,6 +152,7 @@ void meminfo_browse_class_static_members(php_stream *stream,  HashTable *visited
 
         if (class_entry->static_members_table) {
 
+            /*属性也是一个hashtable的*/
             HashTable *properties_info = &(class_entry->properties_info);
 
             zend_hash_internal_pointer_reset_ex(properties_info, &prop_pos);
@@ -188,6 +201,7 @@ void meminfo_browse_zvals_from_symbol_table(php_stream *stream, char* frame_labe
 
         zend_hash_get_current_key_ex(p_symbol_table, &key, &index, &pos);
 
+        //这个是从hash中获取的数据
         meminfo_zval_dump(stream, frame_label, key, zval_to_dump, visited_items, first_element);
 
         zend_hash_move_forward_ex(p_symbol_table, &pos);
@@ -425,8 +439,8 @@ void meminfo_build_frame_label(char* frame_label, int frame_label_len, zend_exec
     const char *function_name;
     char * call_type;
     zend_string *class_name = NULL;
-    zend_object *object;
-    zend_execute_data *ptr;
+    zend_object *object;//当前的对象
+    zend_execute_data *ptr;//当前的数据
 
     object = Z_OBJ(frame->This);
     ptr = frame->prev_execute_data;
