@@ -16,6 +16,8 @@
 #include "SAPI.h"
 #include "zend_API.h"
 
+#include "zend_smart_str.h"
+
 
 const zend_function_entry meminfo_functions[] = {
     PHP_FE(meminfo_dump, NULL)
@@ -41,55 +43,116 @@ zend_module_entry meminfo_module_entry = {
  */
 PHP_FUNCTION(meminfo_dump)
 {
+    /*定义智能字符串*/
+    smart_str my_str = {0};
+    zend_string *result;
+
     zval *zval_stream;
 
     char header[1024];
 
     int first_element = 1;
 
-    php_stream *stream;
+    //php_stream *stream;
     HashTable *visited_items;
+    //zend_string *stream;
 
     /*这个是打开的文件资源类型的*/
-    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &zval_stream) == FAILURE) {
-        return;
-    }
+    //if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "r", &zval_stream) == FAILURE) {
+    //    return;
+    //}
 
     ALLOC_HASHTABLE(visited_items);
     zend_hash_init(visited_items, 1000, NULL, NULL, 0);
 
-    php_stream_from_zval(stream, zval_stream);
+    //php_stream_from_zval(stream, zval_stream);
 
-    php_stream_printf(stream TSRMLS_CC, "{\n");
 
-    php_stream_printf(stream TSRMLS_CC, "  \"header\" : {\n");
-    php_stream_printf(stream TSRMLS_CC, "    \"memory_usage\" : %d,\n", zend_memory_usage(0));
-    php_stream_printf(stream TSRMLS_CC, "    \"memory_usage_real\" : %d,\n", zend_memory_usage(1));
-    php_stream_printf(stream TSRMLS_CC, "    \"peak_memory_usage\" : %d,\n", zend_memory_peak_usage(0));
-    php_stream_printf(stream TSRMLS_CC, "    \"peak_memory_usage_real\" : %d\n", zend_memory_peak_usage(1));
-    php_stream_printf(stream TSRMLS_CC, "  },\n");
+    //php_stream_printf(stream TSRMLS_CC, "{\n");
+
+    //php_stream_printf(stream TSRMLS_CC, "  \"header\" : {\n");
+    //php_stream_printf(stream TSRMLS_CC, "    \"memory_usage\" : %d,\n", zend_memory_usage(0));
+    //php_stream_printf(stream TSRMLS_CC, "    \"memory_usage_real\" : %d,\n", zend_memory_usage(1));
+    //php_stream_printf(stream TSRMLS_CC, "    \"peak_memory_usage\" : %d,\n", zend_memory_peak_usage(0));
+    //php_stream_printf(stream TSRMLS_CC, "    \"peak_memory_usage_real\" : %d\n", zend_memory_peak_usage(1));
+    //php_stream_printf(stream TSRMLS_CC, "  },\n");
 
     //开始查询全部的内存数据的
-    php_stream_printf(stream TSRMLS_CC, "  \"items\": {\n");
+    //php_stream_printf(stream TSRMLS_CC, "  \"items\": {\n");
+
+    //stream = &my_str;
+
+    /*使用字符串拼接的*/
+    result = strpprintf(0, "{\n");
+    smart_str_append(&my_str, result);
+
+    result = strpprintf(0, "  \"header\" : {\n");
+    smart_str_append(&my_str, result);
+
+    result = strpprintf(0, "    \"memory_usage\" : %d,\n", zend_memory_usage(0));
+    smart_str_append(&my_str, result);
+
+    result = strpprintf(0, "    \"memory_usage_real\" : %d,\n", zend_memory_usage(1));
+    smart_str_append(&my_str, result);
+
+    result = strpprintf(0, "    \"peak_memory_usage\" : %d,\n", zend_memory_peak_usage(0));
+    smart_str_append(&my_str, result);
+
+    result = strpprintf(0, "    \"peak_memory_usage_real\" : %d\n", zend_memory_peak_usage(1));
+    smart_str_append(&my_str, result);
+
+    result = strpprintf(0, "  },\n");
+    smart_str_append(&my_str, result);
+
+    result = strpprintf(0, "  \"items\": {\n");
+    smart_str_append(&my_str, result);
+
+    // smart_str_appends(&my_str, "{\n");
+    // smart_str_appends(&my_str, "{\n");
+    // smart_str_appends(&my_str, "{\n");
+
 
     //运行栈的数据
-    meminfo_browse_exec_frames(stream,  visited_items, &first_element);
+    meminfo_browse_exec_frames(&my_str,  visited_items, &first_element);
 
     //全局的数据的
-    meminfo_browse_class_static_members(stream,  visited_items, &first_element);
+    meminfo_browse_class_static_members(&my_str,  visited_items, &first_element);
 
-    php_stream_printf(stream TSRMLS_CC, "\n    }\n");
-    php_stream_printf(stream TSRMLS_CC, "}\n}\n");
+    //php_stream_printf(stream TSRMLS_CC, "\n    }\n");
+    //php_stream_printf(stream TSRMLS_CC, "}\n}\n");
+
+    result = strpprintf(0, "\n    }\n");
+    smart_str_append(&my_str, result);
+
+    result = strpprintf(0, "}\n}\n");
+    smart_str_append(&my_str, result);
 
     //释放内存的
     zend_hash_destroy(visited_items);
     FREE_HASHTABLE(visited_items);
+
+    /**/
+    // zend_string *prefix, *subject, *result;
+
+    // prefix = zend_string_init("prefix",strlen("prefix"),0);
+    // subject = zend_string_init("subject",strlen("subject"),0);
+
+    // result = strpprintf(0, "%s %s", ZSTR_VAL(prefix), ZSTR_VAL(subject));
+
+    // result = strpprintf(0, " \"memory_usage\" : %d,\n", zend_memory_usage(0));
+
+    smart_str_0(&my_str);
+
+    RETURN_STR(my_str.s);
+
+    zend_string_release(result);
+    smart_str_free(&my_str);
 }
 
 /**
  * Go through all exec frames to gather declared variables and follow them to record items in memory
  */
-void meminfo_browse_exec_frames(php_stream *stream,  HashTable *visited_items, int *first_element)
+void meminfo_browse_exec_frames(smart_str *stream,  HashTable *visited_items, int *first_element)
 {
     zend_execute_data *exec_frame, *prev_frame;
     zend_execute_data *init_exec_frame;
@@ -134,7 +197,7 @@ void meminfo_browse_exec_frames(php_stream *stream,  HashTable *visited_items, i
 /**
  * Go through static members of classes
  */
-void meminfo_browse_class_static_members(php_stream *stream,  HashTable *visited_items, int *first_element)
+void meminfo_browse_class_static_members(smart_str *stream,  HashTable *visited_items, int *first_element)
 {
     HashPosition ce_pos;
     HashPosition prop_pos;
@@ -186,7 +249,7 @@ void meminfo_browse_class_static_members(php_stream *stream,  HashTable *visited
     }
 }
 
-void meminfo_browse_zvals_from_symbol_table(php_stream *stream, char* frame_label, HashTable *p_symbol_table, HashTable * visited_items, int *first_element)
+void meminfo_browse_zvals_from_symbol_table(smart_str *stream, char* frame_label, HashTable *p_symbol_table, HashTable * visited_items, int *first_element)
 {
     zval *zval_to_dump;
     HashPosition pos;
@@ -228,7 +291,7 @@ int meminfo_visit_item(char * item_identifier, HashTable *visited_items)
     return found;
 }
 
-void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, HashTable *visited_items, int *first_element)
+void meminfo_hash_dump(smart_str *stream, HashTable *ht, zend_bool is_object, HashTable *visited_items, int *first_element)
 {
     zval *zval;
 
@@ -239,7 +302,12 @@ void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, H
 
     int first_child = 1;
 
-    php_stream_printf(stream TSRMLS_CC, "        \"children\" : {\n");
+    //php_stream_printf(stream TSRMLS_CC, "        \"children\" : {\n");
+
+    zend_string *result;
+
+    result = strpprintf(0, "        \"children\" : {\n");
+    smart_str_append(stream, result);
 
     zend_hash_internal_pointer_reset_ex(ht, &pos);
     while (zval = zend_hash_get_current_data_ex(ht, &pos)) {
@@ -260,7 +328,10 @@ void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, H
         }
 
         if (!first_child) {
-            php_stream_printf(stream TSRMLS_CC, ",\n");
+            //php_stream_printf(stream TSRMLS_CC, ",\n");
+
+            result = strpprintf(0, ",\n");
+            smart_str_append(stream, result);
         } else {
             first_child = 0;
         }
@@ -276,7 +347,10 @@ void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, H
 
                     escaped_property_name = meminfo_escape_for_json(property_name);
 
-                    php_stream_printf(stream TSRMLS_CC, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_property_name), zval_id);
+                    //php_stream_printf(stream TSRMLS_CC, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_property_name), zval_id);
+
+                    result = strpprintf(0, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_property_name), zval_id);
+                    smart_str_append(stream, result);
 
                     zend_string_release(escaped_property_name);
                 } else {
@@ -284,29 +358,43 @@ void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, H
 
                     escaped_key = meminfo_escape_for_json(ZSTR_VAL(key));
 
-                    php_stream_printf(stream TSRMLS_CC, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_key), zval_id);
+                    //php_stream_printf(stream TSRMLS_CC, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_key), zval_id);
+
+                    result = strpprintf(0, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_key), zval_id);
+                    smart_str_append(stream, result);
 
                     zend_string_release(escaped_key);
                 }
 
                 break;
             case HASH_KEY_IS_LONG:
-                php_stream_printf(stream TSRMLS_CC, "            \"%ld\":\"%s\"", num_key, zval_id);
+                //php_stream_printf(stream TSRMLS_CC, "            \"%ld\":\"%s\"", num_key, zval_id);
+
+                result = strpprintf(0, "            \"%ld\":\"%s\"", num_key, zval_id);
+                smart_str_append(stream, result);
                 break;
         }
 
         zend_hash_move_forward_ex(ht, &pos);
     }
-    php_stream_printf(stream TSRMLS_CC, "\n        }\n");
+
+
+    //php_stream_printf(stream TSRMLS_CC, "\n        }\n");
+
+    result = strpprintf(0, "\n        }\n");
+    smart_str_append(stream, result);
+
 
     zend_hash_internal_pointer_reset_ex(ht, &pos);
     while (zval = zend_hash_get_current_data_ex(ht, &pos)) {
         meminfo_zval_dump(stream, NULL, NULL, zval, visited_items, first_element);
         zend_hash_move_forward_ex(ht, &pos);
     }
+
+    zend_string_release(result);
 }
 
-void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * symbol_name, zval * zv, HashTable *visited_items, int *first_element)
+void meminfo_zval_dump(smart_str * stream, char * frame_label, zend_string * symbol_name, zval * zv, HashTable *visited_items, int *first_element)
 {
     char zval_identifier[16];
 
@@ -328,15 +416,30 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
         return;
     }
 
+    zend_string *result;
     if (! *first_element) {
-        php_stream_printf(stream TSRMLS_CC, "\n    },\n");
+        //php_stream_printf(stream TSRMLS_CC, "\n    },\n");
+        
+        result = strpprintf(0, "\n    },\n");
+        smart_str_append(stream, result);
+
     } else {
         *first_element = 0;
     }
 
-    php_stream_printf(stream TSRMLS_CC, "    \"%s\" : {\n", zval_identifier);
-    php_stream_printf(stream TSRMLS_CC, "        \"type\" : \"%s\",\n", zend_get_type_by_const(Z_TYPE_P(zv)));
-    php_stream_printf(stream TSRMLS_CC, "        \"size\" : \"%ld\",\n", meminfo_get_element_size(zv));
+    //php_stream_printf(stream TSRMLS_CC, "    \"%s\" : {\n", zval_identifier);
+    //php_stream_printf(stream TSRMLS_CC, "        \"type\" : \"%s\",\n", zend_get_type_by_const(Z_TYPE_P(zv)));
+    //php_stream_printf(stream TSRMLS_CC, "        \"size\" : \"%ld\",\n", meminfo_get_element_size(zv));
+
+    result = strpprintf(0, "    \"%s\" : {\n", zval_identifier);
+    smart_str_append(stream, result);
+
+    result = strpprintf(0, "        \"type\" : \"%s\",\n", zend_get_type_by_const(Z_TYPE_P(zv)));
+    smart_str_append(stream, result);
+
+
+    result = strpprintf(0, "        \"size\" : \"%ld\",\n", meminfo_get_element_size(zv));
+    smart_str_append(stream, result);
 
     if (frame_label) {
         zend_string * escaped_frame_label;
@@ -346,19 +449,31 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
 
             escaped_symbol_name = meminfo_escape_for_json(ZSTR_VAL(symbol_name));
 
-            php_stream_printf(stream TSRMLS_CC, "        \"symbol_name\" : \"%s\",\n", ZSTR_VAL(escaped_symbol_name));
+            //php_stream_printf(stream TSRMLS_CC, "        \"symbol_name\" : \"%s\",\n", ZSTR_VAL(escaped_symbol_name));
+            result = strpprintf(0, "        \"symbol_name\" : \"%s\",\n", ZSTR_VAL(escaped_symbol_name));
+            smart_str_append(stream, result);
 
             zend_string_release(escaped_symbol_name);
         }
 
         escaped_frame_label = meminfo_escape_for_json(frame_label);
 
-        php_stream_printf(stream TSRMLS_CC, "        \"is_root\" : true,\n");
-        php_stream_printf(stream TSRMLS_CC, "        \"frame\" : \"%s\"\n", ZSTR_VAL(escaped_frame_label));
+        //php_stream_printf(stream TSRMLS_CC, "        \"is_root\" : true,\n");
+        //php_stream_printf(stream TSRMLS_CC, "        \"frame\" : \"%s\"\n", ZSTR_VAL(escaped_frame_label));
+
+        result = strpprintf(0,"        \"is_root\" : true,\n");
+        smart_str_append(stream, result);
+
+        result = strpprintf(0, "        \"frame\" : \"%s\"\n", ZSTR_VAL(escaped_frame_label));
+        smart_str_append(stream, result);
+
 
         zend_string_release(escaped_frame_label);
     } else {
-        php_stream_printf(stream TSRMLS_CC, "        \"is_root\" : false\n");
+        //php_stream_printf(stream TSRMLS_CC, "        \"is_root\" : false\n");
+
+        result = strpprintf(0, "        \"is_root\" : false\n");
+        smart_str_append(stream, result);
     }
 
     if (Z_TYPE_P(zv) == IS_OBJECT) {
@@ -370,16 +485,28 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
 
         escaped_class_name = meminfo_escape_for_json(ZSTR_VAL(zv->value.obj->ce->name));
 
-        php_stream_printf(stream TSRMLS_CC, ",\n");
-        php_stream_printf(stream TSRMLS_CC, "        \"class\" : \"%s\",\n", ZSTR_VAL(escaped_class_name));
+        //php_stream_printf(stream TSRMLS_CC, ",\n");
+        //php_stream_printf(stream TSRMLS_CC, "        \"class\" : \"%s\",\n", ZSTR_VAL(escaped_class_name));
+
+        result = strpprintf(0,",\n");
+        smart_str_append(stream, result);
+
+        result = strpprintf(0,"        \"class\" : \"%s\",\n", ZSTR_VAL(escaped_class_name));
+        smart_str_append(stream, result);
+
 
         zend_string_release(escaped_class_name);
 
-        php_stream_printf(stream TSRMLS_CC, "        \"object_handle\" : \"%d\",\n", zv->value.obj->handle);
+        //php_stream_printf(stream TSRMLS_CC, "        \"object_handle\" : \"%d\",\n", zv->value.obj->handle);
+
+        result = strpprintf(0, "        \"object_handle\" : \"%d\",\n", zv->value.obj->handle);
+        smart_str_append(stream, result);
+
 
         properties = Z_OBJDEBUG_P(zv, is_temp);
 
         if (properties != NULL) {
+            /**/
             meminfo_hash_dump(stream, properties, 1, visited_items, first_element);
 
             if (is_temp) {
@@ -388,11 +515,21 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
             }
         }
     } else if (Z_TYPE_P(zv) == IS_ARRAY) {
-        php_stream_printf(stream TSRMLS_CC, ",\n");
+        //php_stream_printf(stream TSRMLS_CC, ",\n");
+
+        result = strpprintf(0, ",\n");
+        smart_str_append(stream, result);
+
+        /**/
         meminfo_hash_dump(stream, zv->value.arr, 0, visited_items, first_element);
     } else {
-        php_stream_printf(stream TSRMLS_CC, "\n");
+        //php_stream_printf(stream TSRMLS_CC, "\n");
+
+        result = strpprintf(0, "\n");
+        smart_str_append(stream, result);
     }
+
+    zend_string_release(result);
 }
 
 /**
