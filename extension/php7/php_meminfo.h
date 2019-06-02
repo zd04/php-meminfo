@@ -10,6 +10,7 @@
 #define MEMINFO_COPYRIGHT_SHORT "Copyright (c) 2011-2017"
 
 PHP_FUNCTION(meminfo_dump);
+PHP_FUNCTION(meminfo_dump2);
 
 zend_ulong   meminfo_get_element_size(zval* z);
 
